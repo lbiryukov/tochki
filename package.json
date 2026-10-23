@@ -1,0 +1,17 @@
+{
+  "name": "tochki",
+  "private": true,
+  "description": "Игра «Точки» в браузере: вдвоём на одном телефоне или по ссылке через Firebase",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node test/engine.test.js && node test/rules.test.js",
+    "mock": "node scripts/build.js && node mock/server.js",
+    "e2e": "node scripts/build.js && python test/e2e/two_players.py && python test/e2e/settings.py"
+  },
+  "devDependencies": {
+    "targaryen": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

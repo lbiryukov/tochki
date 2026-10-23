@@ -1,0 +1,1691 @@
+<title>Точки</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Golos+Text:wght@400;500;600&display=swap">
+<style>
+/* Layout: один экран — счёт «от руки» сверху, лист в клетку посередине, кнопки хода снизу.
+   Мотив — тетрадь и две шариковые ручки: красная и синяя. */
+:root {
+  --desk: #E4E9EF;
+  --paper: #FBFCFD;
+  --grid: #C3D4E7;
+  --frame: #93ADC9;
+  --ink: #1C2330;
+  --muted: #5B6879;
+  --red: #CC2F2B;
+  --blue: #2747AE;
+  --on-ink: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #F2F5F9;
+  --line: #D3DCE7;
+  --shadow: rgba(32, 52, 84, .18);
+  --scrim: rgba(18, 24, 33, .38);
+  --f-hand: "Caveat", "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --f-ui: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0D1116; --paper: #161B22; --grid: #263140; --frame: #3B4A5D;
+    --ink: #E5E9EF; --muted: #8E9AAA; --red: #FF6B5D; --blue: #7C9CFF; --on-ink: #0D1116;
+    --surface: #1B2129; --surface-2: #212833; --line: #2D3744;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #0D1116; --paper: #161B22; --grid: #263140; --frame: #3B4A5D;
+  --ink: #E5E9EF; --muted: #8E9AAA; --red: #FF6B5D; --blue: #7C9CFF; --on-ink: #0D1116;
+  --surface: #1B2129; --surface-2: #212833; --line: #2D3744;
+  --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 15px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button { font: inherit; color: inherit; touch-action: manipulation; cursor: pointer; }
+button:focus-visible, .item:focus-visible, .link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Счёт */
+.top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 8px;
+  padding-block: 10px 8px;
+}
+.score { position: relative; display: flex; flex-direction: column; min-width: 0; padding-bottom: 7px; color: var(--muted); }
+.score[data-p="1"] { align-items: flex-end; text-align: right; }
+.score .label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  transition: color .2s;
+}
+.score[data-p="1"] .label { flex-direction: row-reverse; }
+.score .label i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.score .you {
+  font-size: 10px; letter-spacing: .05em; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.score[data-p="0"] .label i, .score[data-p="0"]::after { background-color: var(--red); }
+.score[data-p="1"] .label i, .score[data-p="1"]::after { background-color: var(--blue); }
+.score .num { font-family: var(--f-hand); font-weight: 700; font-size: 42px; line-height: .95; font-variant-numeric: tabular-nums; }
+.score[data-p="0"] .num { color: var(--red); }
+.score[data-p="1"] .num { color: var(--blue); }
+/* подчёркивание того, чей ход; при лимите времени оно сгорает, как фитиль */
+.score::after {
+  content: ""; position: absolute; bottom: 0; height: 3px; width: 58px; border-radius: 3px;
+  transform: rotate(-2.5deg) scaleX(0); transition: transform .25s ease-out;
+}
+.score[data-p="0"]::after { left: 0; transform-origin: left center; }
+.score[data-p="1"]::after { right: 0; transform-origin: right center; }
+.score.active::after { transform: rotate(-2.5deg) scaleX(var(--fuse, 1)); }
+.score.timed::after { transition: transform .25s linear; }
+.score.active .label, .score.won .label { color: var(--ink); }
+.brand { text-align: center; padding-bottom: 6px; min-width: 0; }
+.brand h1 { margin: 0; font-family: var(--f-hand); font-weight: 700; font-size: 32px; line-height: 1; }
+.status { font-size: 12px; color: var(--muted); max-width: 44vw; text-wrap: balance; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.status.urgent { font-weight: 600; }
+.status.urgent[data-p="0"] { color: var(--red); }
+.status.urgent[data-p="1"] { color: var(--blue); }
+
+/* Поле */
+.board {
+  position: relative; flex: 1; min-height: 0;
+  border-radius: 14px; overflow: hidden; background: var(--desk);
+  touch-action: none;
+}
+#cv { position: absolute; inset: 0; display: block; touch-action: none; cursor: crosshair; }
+.zoom { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.icon-btn {
+  width: 42px; height: 42px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  display: grid; place-items: center; padding: 0;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.icon-btn:disabled { opacity: .4; cursor: default; }
+.icon-btn svg { width: 20px; height: 20px; }
+
+.toast {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 24px); width: max-content;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px;
+  background: var(--ink); color: var(--paper);
+  font-size: 14px; line-height: 1.3; pointer-events: none; z-index: 3;
+  box-shadow: 0 4px 14px var(--shadow);
+  animation: toast-in .18s ease-out;
+}
+.toast::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: none; display: none; }
+.toast[data-p="0"]::before { display: block; background: var(--red); }
+.toast[data-p="1"]::before { display: block; background: var(--blue); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } }
+
+.card {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 2;
+  width: min(320px, calc(100% - 24px));
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 18px 16px 16px; border-radius: 16px;
+  background: var(--surface); box-shadow: 0 12px 34px var(--shadow);
+}
+.card .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.result {
+  top: 50%; transform: translate(-50%, -50%); text-align: center; gap: 6px;
+  max-height: calc(100% - 20px); overflow-y: auto;
+}
+.result h2 { margin: 0; font-family: var(--f-hand); font-weight: 700; font-size: 40px; line-height: 1; text-wrap: balance; }
+.result[data-p="0"] h2 { color: var(--red); }
+.result[data-p="1"] h2 { color: var(--blue); }
+.result .sc { font-family: var(--f-hand); font-weight: 700; font-size: 32px; font-variant-numeric: tabular-nums; }
+.result .sc .r { color: var(--red); } .result .sc .b { color: var(--blue); }
+.result p { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+.stats {
+  display: grid; grid-template-columns: 1fr auto auto; column-gap: 16px; row-gap: 5px;
+  align-items: baseline; text-align: left; font-size: 14px;
+  margin: 2px 0 10px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.stats .cap { grid-column: 1 / -1; font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+.stats .h { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; text-align: right; }
+.stats .h.r { color: var(--red); } .stats .h.b { color: var(--blue); }
+.stats .k { color: var(--muted); }
+.stats .v { text-align: right; font-weight: 500; }
+.offer { top: 12px; }
+.offer p { margin: 0 0 4px; font-size: 15px; line-height: 1.4; }
+
+/* Кнопки хода */
+.bar {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding-block: 10px 12px;
+}
+.bar.online { grid-template-columns: 1fr auto; }
+.btn {
+  min-height: 48px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-weight: 500; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.bar .icon-btn { width: 48px; height: 48px; border-radius: 12px; box-shadow: none; }
+.primary { border: 0; color: var(--on-ink); background: var(--red); font-weight: 600; transition: background-color .2s; }
+.primary[data-p="1"] { background: var(--blue); }
+.primary:disabled {
+  background: transparent; color: var(--muted); border: 1.5px dashed var(--line);
+  font-weight: 500; cursor: default;
+}
+.primary .pen { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.primary:disabled .pen, .primary[data-action="invite"] .pen { display: none; }
+.btn.solid { background: var(--red); color: var(--on-ink); border: 0; font-weight: 600; }
+.btn.solid[data-p="1"] { background: var(--blue); }
+
+/* Меню */
+.sheet-back {
+  position: fixed; inset: 0; z-index: 20;
+  background: var(--scrim);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet {
+  width: 100%; max-width: 480px;
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  padding-top: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  max-height: 92%; overflow-y: auto;
+  animation: sheet-in .2s ease-out;
+}
+@keyframes sheet-in { from { transform: translateY(24px); opacity: .6; } }
+.sheet h2 { margin: 0 0 4px; font-family: var(--f-hand); font-size: 30px; font-weight: 700; }
+.pane { display: flex; flex-direction: column; gap: 8px; }
+.item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 12px 14px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+.item small { color: var(--muted); font-size: 13px; }
+.item:disabled { opacity: .45; cursor: default; }
+.item.danger .t { color: var(--red); }
+.choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 16px; border-radius: 14px; text-align: left;
+  border: 1.5px solid var(--line); background: var(--surface-2);
+}
+.choice b { font-size: 17px; font-weight: 600; }
+.choice small { color: var(--muted); font-size: 14px; line-height: 1.4; }
+.choice.lead { border-color: var(--red); }
+.choice.lead b { color: var(--red); }
+.note { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; max-width: 65ch; }
+.link {
+  width: 100%; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+  font: 500 14px var(--f-ui);
+  -webkit-user-select: text; user-select: text;
+}
+.list { display: flex; flex-direction: column; gap: 8px; }
+.rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; max-width: 65ch; }
+.rules li::marker { color: var(--muted); }
+.confirm-text { margin: 4px 0 8px; font-size: 16px; line-height: 1.4; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn.warn { background: var(--red); color: var(--on-ink); border: 0; font-weight: 600; }
+
+/* Настройки новой партии */
+.opts { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); margin-bottom: 4px; }
+.opt { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; cursor: pointer; }
+.opt + .opt, .time-row { border-top: 1px solid var(--line); }
+.opt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.opt-text b { font-weight: 600; font-size: 15px; }
+.opt-text small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.switch {
+  -webkit-appearance: none; appearance: none; flex: none; margin: 0;
+  width: 46px; height: 28px; border-radius: 999px; position: relative; cursor: pointer;
+  background: var(--line); transition: background-color .2s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface); box-shadow: 0 1px 2px var(--shadow); transition: transform .2s;
+}
+.switch:checked { background: var(--ink); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.time-row { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 10px 12px; }
+.spin { display: flex; align-items: center; gap: 4px; }
+.spin button {
+  width: 40px; height: 40px; border-radius: 10px; padding: 0;
+  border: 1px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; font-size: 22px; line-height: 1;
+}
+.spin-val { display: flex; flex-direction: column; align-items: center; width: 50px; }
+.spin-val input {
+  width: 100%; border: 0; background: transparent; color: var(--ink); text-align: center; padding: 0;
+  font-family: var(--f-hand); font-weight: 700; font-size: 32px; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: text; user-select: text;
+}
+.spin-val input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; border-radius: 6px; }
+.spin-val span { font-size: 11px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+.colon { font-family: var(--f-hand); font-weight: 700; font-size: 32px; padding-bottom: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<!--__BODY__-->
+<header class="top">
+  <div class="score active" id="s0" data-p="0">
+    <span class="label"><i></i>Красные<span class="you" id="you0" hidden>вы</span></span>
+    <span class="num" id="n0">0</span>
+  </div>
+  <div class="brand">
+    <h1>Точки</h1>
+    <div class="status" id="status">&nbsp;</div>
+  </div>
+  <div class="score" id="s1" data-p="1">
+    <span class="label"><i></i>Синие<span class="you" id="you1" hidden>вы</span></span>
+    <span class="num" id="n1">0</span>
+  </div>
+</header>
+
+<main class="board" id="wrap">
+  <canvas id="cv" role="img" aria-label="Игровое поле 39 на 32"></canvas>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div class="zoom">
+    <button class="icon-btn" id="zin" type="button" aria-label="Приблизить" title="Приблизить">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="icon-btn" id="zout" type="button" aria-label="Отдалить" title="Отдалить">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+    </button>
+    <button class="icon-btn" id="zfit" type="button" aria-label="Показать всё поле" title="Показать всё поле">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </div>
+  <div class="card offer" id="offer" hidden>
+    <p id="offerText"></p>
+    <div class="row">
+      <button class="btn" id="offNo" type="button">Играть дальше</button>
+      <button class="btn solid" id="offYes" type="button">Подсчитать</button>
+    </div>
+  </div>
+  <div class="card result" id="result" hidden>
+    <h2 id="rTitle"></h2>
+    <div class="sc"><span class="r" id="rS0">0</span> : <span class="b" id="rS1">0</span></div>
+    <p id="rReason"></p>
+    <div class="stats" id="rStats" hidden></div>
+    <div class="row">
+      <button class="btn" id="rView" type="button">К полю</button>
+      <button class="btn" id="rNew" type="button">Новая партия</button>
+    </div>
+  </div>
+</main>
+
+<footer class="bar" id="bar">
+  <button class="icon-btn" id="undo" type="button" aria-label="Отменить последний ход" title="Отменить ход">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+  </button>
+  <button class="btn primary" id="place" type="button" disabled><span class="pen"></span><span id="placeText">Тапните по полю</span></button>
+  <button class="icon-btn" id="menuBtn" type="button" aria-label="Меню партии" title="Меню">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+</footer>
+
+<div class="sheet-back" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Меню партии">
+    <div class="pane" id="pane-start" hidden>
+      <h2>Новая партия</h2>
+      <div class="opts">
+        <label class="opt" for="optBonus">
+          <span class="opt-text"><b>Доп. ход за окружение</b><small id="optBonusNote"></small></span>
+          <input class="switch" type="checkbox" id="optBonus">
+        </label>
+        <label class="opt" for="optTimed">
+          <span class="opt-text"><b>Время на ход</b><small id="optTimedNote"></small></span>
+          <input class="switch" type="checkbox" id="optTimed">
+        </label>
+        <div class="time-row" id="timeRow" hidden>
+          <div class="spin">
+            <button type="button" id="tMinDec" aria-label="Минус минута">−</button>
+            <div class="spin-val"><input id="tMin" type="text" inputmode="numeric" maxlength="2" aria-label="Минуты"><span>мин</span></div>
+            <button type="button" id="tMinInc" aria-label="Плюс минута">+</button>
+          </div>
+          <span class="colon">:</span>
+          <div class="spin">
+            <button type="button" id="tSecDec" aria-label="Минус 5 секунд">−</button>
+            <div class="spin-val"><input id="tSec" type="text" inputmode="numeric" maxlength="2" aria-label="Секунды"><span>сек</span></div>
+            <button type="button" id="tSecInc" aria-label="Плюс 5 секунд">+</button>
+          </div>
+        </div>
+      </div>
+      <button class="choice lead" id="stLink" type="button"><b>С другом по ссылке</b><small>Каждый со своего телефона. Отправите другу ссылку, и можно начинать</small></button>
+      <button class="choice" id="stLocal" type="button"><b>Вдвоём на этом телефоне</b><small>Передаёте телефон друг другу после каждого хода</small></button>
+      <button class="item" id="stRooms" type="button" hidden><span class="t">Мои партии по ссылке</span><small>Вернуться к начатой партии</small></button>
+      <button class="btn" id="stClose" type="button">Закрыть</button>
+    </div>
+    <div class="pane" id="pane-main" hidden>
+      <h2>Партия</h2>
+      <p class="note" id="gameInfo"></p>
+      <button class="item" id="mInvite" type="button"><span class="t">Пригласить соперника</span><small></small></button>
+      <button class="item" id="mAgree" type="button"><span class="t">Закончить и подсчитать</span><small></small></button>
+      <button class="item danger" id="mResign" type="button"><span class="t">Сдаться</span><small></small></button>
+      <button class="item" id="mNew" type="button"><span class="t">Новая партия</span><small>Настройки, игра по ссылке или на этом телефоне</small></button>
+      <button class="item" id="mRooms" type="button"><span class="t">Мои партии по ссылке</span><small>Партии, начатые на этом телефоне</small></button>
+      <button class="item" id="mLocal" type="button"><span class="t">Партия на этом телефоне</span><small>Вернуться к игре вдвоём на одном телефоне</small></button>
+      <button class="item" id="mRules" type="button"><span class="t">Правила и управление</span><small>Как ходить, захватывать и считать очки</small></button>
+      <button class="btn" id="mClose" type="button">Закрыть</button>
+    </div>
+    <div class="pane" id="pane-confirm" hidden>
+      <h2>Точно?</h2>
+      <p class="confirm-text" id="confirmText"></p>
+      <div class="row2">
+        <button class="btn" id="cNo" type="button">Отмена</button>
+        <button class="btn warn" id="cYes" type="button">Да</button>
+      </div>
+    </div>
+    <div class="pane" id="pane-invite" hidden>
+      <h2>Позовите соперника</h2>
+      <p class="note">Отправьте другу эту ссылку: по ней он сядет за синих. Кто ходит первым, уже решил жребий.</p>
+      <input class="link" id="inviteLink" type="text" readonly aria-label="Ссылка для соперника">
+      <div class="row2">
+        <button class="btn" id="invCopy" type="button">Скопировать</button>
+        <button class="btn solid" id="invShare" type="button">Поделиться</button>
+      </div>
+      <p class="note" id="inviteInfo"></p>
+      <p class="note">Свою ссылку не пересылайте: по ней играют за вас. Партия сохранится в «Моих партиях» на этом телефоне.</p>
+      <button class="btn" id="invClose" type="button">Готово</button>
+    </div>
+    <div class="pane" id="pane-rooms" hidden>
+      <h2>Мои партии</h2>
+      <div class="list" id="roomsList"></div>
+      <button class="btn solid" id="roomsNew" type="button">Новая партия</button>
+      <button class="btn" id="roomsBack" type="button">Назад</button>
+    </div>
+    <div class="pane" id="pane-rules" hidden>
+      <h2>Правила</h2>
+      <ol class="rules">
+        <li>Ставьте точки по очереди на пересечения линий. Первого игрока выбирает жребий.</li>
+        <li>Замкните цепочку своих точек вокруг точек соперника, и они ваши. Соседние точки цепочки стоят через одну клетку по горизонтали, вертикали или диагонали.</li>
+        <li>Внутрь чужого окружения ставить нельзя, даже если оно пустое. Край листа окружением не считается.</li>
+        <li>Очки дают только за захваченные точки. Если окружить зону, где раньше захватили ваши точки, они освобождаются.</li>
+        <li>С настройкой «Доп. ход за окружение» тот, кто окружил точки соперника, сразу ходит ещё раз.</li>
+        <li>С настройкой «Время на ход» у каждого хода есть отсчёт. Не успели, и ход переходит сопернику.</li>
+        <li>Партия заканчивается, когда ходов не осталось, по договорённости или если кто-то сдался. В конце видно, сколько каждый в среднем думал над ходом.</li>
+        <li>Тап выбирает точку, второй тап или кнопка ставит её. Двумя пальцами меняйте масштаб, одним двигайте лист.</li>
+        <li>В игре по ссылке ход отменить нельзя, поэтому точка ставится только после подтверждения.</li>
+      </ol>
+      <button class="btn" id="rulesBack" type="button">Назад</button>
+    </div>
+  </div>
+</div>
+
+<!--__FIREBASE__-->
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+(function () {
+  'use strict';
+  const E = window.DotsEngine;
+  const PASS = E.PASS;
+  const W = 39, H = 32;
+  const KEY = 'tochki.local.v1', ROOMS_KEY = 'tochki.rooms.v1', SETUP_KEY = 'tochki.setup.v1';
+  const NAMES = ['Красные', 'Синие'];
+  const NOM = ['красные', 'синие'];
+  const GEN = ['красных', 'синих'];
+  const REASONS = {
+    occupied: 'Здесь уже стоит точка',
+    territory: 'Эта зона уже захвачена',
+    enclosed: 'Сюда нельзя: зона окружена соперником',
+    over: 'Партия окончена',
+  };
+  const ALPH = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const M = 0.9; // поля листа вокруг крайних точек, в клетках
+  const LIMIT_MIN = 5, LIMIT_MAX = 59 * 60 + 59;
+  const PASS_GRACE = 2500; // через сколько после конца чужого времени этот телефон сам пропустит ход соперника
+
+  const $ = (id) => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d'), wrap = $('wrap');
+
+  let game = null, ghost = -1;
+  let LOCAL = { started: 0, times: [] }; // время партии на этом телефоне
+  let clockBase = 0;       // когда начался текущий ход (партия на одном телефоне)
+  let pausedAt = 0;        // на одном телефоне часы стоят, пока открыто меню
+  let NET = null;          // null — игра на одном телефоне, иначе партия по ссылке
+  let fb = null;           // { db, auth }
+  let pendingInvite = null;
+  let currentPane = null;
+  let cw = 0, ch = 0, dpr = 1;
+  const view = { s: 10, ox: 0, oy: 0, rot: false, fit: 10 };
+  let colors = { p: ['#c00', '#00c'] };
+  const fbAvailable = !!(window.firebase && window.TOCHKI_FIREBASE);
+
+  const plural = (n, a, b, c) => {
+    const m10 = n % 10, m100 = n % 100;
+    return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c;
+  };
+  function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+  function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    colors = { paper: g('--paper'), grid: g('--grid'), frame: g('--frame'), shadow: g('--shadow'), p: [g('--red'), g('--blue')] };
+  }
+
+  // ---------- настройки и форматы времени ----------
+  const clampLimit = (s) => Math.min(LIMIT_MAX, Math.max(LIMIT_MIN, Math.round(+s) || 0));
+  const normOpts = (o) => ({ bonus: !!(o && o.bonus), limit: o && +o.limit > 0 ? clampLimit(o.limit) : 0 });
+  const setup = (() => {
+    const d = lsGet(SETUP_KEY, null) || {};
+    return { bonus: !!d.bonus, timed: !!d.timed, limit: clampLimit(d.limit || 30) };
+  })();
+  const setupOpts = () => ({ bonus: setup.bonus, limit: setup.timed ? setup.limit : 0 });
+  const fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  function describeOpts(o) {
+    return [o.bonus ? 'доп. ход за окружение' : 'без доп. хода',
+      o.limit ? `${fmtClock(o.limit)} на ход` : 'без ограничения времени'].join(' · ');
+  }
+  function fmtDur(ms) {
+    if (ms == null) return '—';
+    const s = ms / 1000;
+    if (s < 9.95) return s.toFixed(1).replace('.', ',') + ' с';
+    if (s < 59.5) return Math.round(s) + ' с';
+    const t = Math.round(s);
+    if (t < 3600) return fmtClock(t);
+    return `${Math.floor(t / 3600)} ч ${String(Math.floor((t % 3600) / 60)).padStart(2, '0')} мин`;
+  }
+
+  // ---------- партия на одном телефоне: сохранение ----------
+  const serialize = () => ({
+    v: 2, first: game.first, moves: game.moves.slice(), end: game.end,
+    opts: game.opts, started: LOCAL.started, times: LOCAL.times.slice(),
+  });
+  function restore(d) {
+    try {
+      if (d && Array.isArray(d.moves)) {
+        const g = E.replay(W, H, d.first | 0, d.moves, d.end || null, normOpts(d.opts));
+        const times = Array.isArray(d.times) ? d.times.slice(0, g.moves.length) : [];
+        // если времена ходов неполные (старое сохранение), статистику для этой партии не считаем
+        return times.length === g.moves.length ? { game: g, started: +d.started || 0, times } : { game: g, started: 0, times: [] };
+      }
+    } catch (e) { /* повреждённое сохранение — начнём заново */ }
+    return null;
+  }
+  function save() { if (!NET) lsSet(KEY, serialize()); }
+  const loadSaved = () => restore(lsGet(KEY, null));
+
+  // ---------- геометрия: на телефоне в портрете лист поворачивается ----------
+  const DW = () => (view.rot ? H : W) - 1;
+  const DH = () => (view.rot ? W : H) - 1;
+  const sx = (u) => view.ox + u * view.s;
+  const sy = (v) => view.oy + v * view.s;
+  function pt(i) {
+    const x = i % W, y = (i / W) | 0;
+    return view.rot ? [sx(H - 1 - y), sy(x)] : [sx(x), sy(y)];
+  }
+  function fromDisp(u, v) {
+    const x = view.rot ? v : u, y = view.rot ? H - 1 - u : v;
+    return x >= 0 && x < W && y >= 0 && y < H ? y * W + x : -1;
+  }
+  function fitScale() { return Math.min(cw / (DW() + 2 * M), ch / (DH() + 2 * M)); }
+  function fit() { view.fit = view.s = fitScale(); clampView(); }
+  const maxS = () => Math.max(view.fit * 5, 46);
+  function clampView() {
+    view.s = Math.min(Math.max(view.s, view.fit), maxS());
+    const dw = DW() * view.s, dh = DH() * view.s, m = M * view.s;
+    view.ox = dw + 2 * m <= cw ? (cw - dw) / 2 : Math.min(m, Math.max(cw - dw - m, view.ox));
+    // лишнее место по высоте остаётся снизу, под кнопками масштаба
+    view.oy = dh + 2 * m <= ch ? m + Math.min(6, (ch - dh - 2 * m) / 2) : Math.min(m, Math.max(ch - dh - m, view.oy));
+  }
+  function zoomAt(k, px, py) {
+    const s0 = view.s, s1 = Math.min(Math.max(s0 * k, view.fit), maxS()), f = s1 / s0;
+    view.ox = px - (px - view.ox) * f;
+    view.oy = py - (py - view.oy) * f;
+    view.s = s1;
+    clampView();
+    requestDraw();
+  }
+  function resize() {
+    const r = wrap.getBoundingClientRect();
+    const nw = Math.max(1, Math.round(r.width)), nh = Math.max(1, Math.round(r.height));
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const rot = nh > nw * 1.05;
+    const zoomed = cw > 0 && view.s > view.fit * 1.001;
+    cw = nw; ch = nh;
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+    cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+    if (rot !== view.rot || !zoomed) { view.rot = rot; fit(); }
+    else { view.fit = fitScale(); clampView(); }
+    requestDraw();
+  }
+  function fitIfReady() { if (cw) { fit(); requestDraw(); } }
+
+  // ---------- отрисовка ----------
+  let raf = 0;
+  function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+  const dotR = () => Math.min(Math.max(view.s * 0.24, 2.4), 10);
+
+  function rrect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function draw() {
+    if (!game || !cw) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    const s = view.s, dw = DW(), dh = DH(), m = M * s;
+
+    ctx.save();
+    ctx.shadowColor = colors.shadow; ctx.shadowBlur = 14; ctx.shadowOffsetY = 2;
+    ctx.fillStyle = colors.paper;
+    rrect(view.ox - m, view.oy - m, dw * s + 2 * m, dh * s + 2 * m, Math.min(10, m));
+    ctx.fill();
+    ctx.restore();
+
+    const lwd = Math.max(1, Math.round(dpr * 0.75)), off = lwd % 2 ? 0.5 / dpr : 0;
+    const snap = (v) => Math.round(v * dpr) / dpr + off;
+    ctx.lineWidth = lwd / dpr;
+    ctx.strokeStyle = colors.grid;
+    ctx.beginPath();
+    for (let u = 0; u <= dw; u++) {
+      const x = snap(sx(u)); if (x < -2 || x > cw + 2) continue;
+      ctx.moveTo(x, sy(0)); ctx.lineTo(x, sy(dh));
+    }
+    for (let v = 0; v <= dh; v++) {
+      const y = snap(sy(v)); if (y < -2 || y > ch + 2) continue;
+      ctx.moveTo(sx(0), y); ctx.lineTo(sx(dw), y);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = colors.frame;
+    ctx.strokeRect(snap(sx(0)), snap(sy(0)), dw * s, dh * s);
+
+    drawTerritory(0);
+    drawTerritory(1);
+    if (ghost >= 0 && !game.over) drawCross();
+    drawDots();
+    if (ghost >= 0 && !game.over) drawGhost();
+  }
+
+  function poly(path, idx) {
+    const [x0, y0] = pt(idx[0]);
+    path.moveTo(x0, y0);
+    for (let k = 1; k < idx.length; k++) { const [x, y] = pt(idx[k]); path.lineTo(x, y); }
+    path.closePath();
+  }
+  function seg(path, a, b) {
+    const [x1, y1] = pt(a), [x2, y2] = pt(b);
+    path.moveTo(x1, y1); path.lineTo(x2, y2);
+  }
+
+  // Захваченная зона: квадраты и треугольники между точками, контур — по цепочке, штриховка ручкой
+  function drawTerritory(p) {
+    const n = W * H, T = game.terr, own = game.owner, cap = game.cap;
+    const R = new Uint8Array(n), RB = new Uint8Array(n);
+    let any = false;
+    for (let i = 0; i < n; i++) if (T[i] === p) { R[i] = RB[i] = 1; any = true; }
+    if (!any) return;
+    for (let i = 0; i < n; i++) {
+      if (RB[i] || own[i] !== p || cap[i] !== -1) continue;
+      const x = i % W;
+      if ((x > 0 && R[i - 1]) || (x < W - 1 && R[i + 1]) || (i >= W && R[i - W]) || (i < n - W && R[i + W])) RB[i] = 1;
+    }
+    const cW = W - 1, cH = H - 1, kind = new Int8Array(cW * cH).fill(-1);
+    const fill = new Path2D(), edges = new Path2D();
+    for (let y = 0; y < cH; y++) {
+      for (let x = 0; x < cW; x++) {
+        const c = [y * W + x, y * W + x + 1, (y + 1) * W + x + 1, (y + 1) * W + x];
+        let r = -1, rb = 0;
+        for (let k = 0; k < 4; k++) { if (R[c[k]]) r = k; if (RB[c[k]]) rb++; }
+        if (r < 0) continue;
+        const id = y * cW + x;
+        if (rb === 4) { kind[id] = 4; poly(fill, c); }
+        else if (rb === 3) {
+          const a = c[(r + 3) % 4], d = c[(r + 1) % 4];
+          kind[id] = r;
+          poly(fill, [a, c[r], d]);
+          seg(edges, a, d);
+        }
+      }
+    }
+    const covers = (cx, cy, k1, k2) => {
+      if (cx < 0 || cy < 0 || cx >= cW || cy >= cH) return false;
+      const t = kind[cy * cW + cx];
+      return t === 4 || (t >= 0 && t < 4 && (t === k1 || t === k2));
+    };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W - 1; x++) {
+      if (covers(x, y - 1, 3, 2) !== covers(x, y, 0, 1)) seg(edges, y * W + x, y * W + x + 1);
+    }
+    for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
+      if (covers(x - 1, y, 1, 2) !== covers(x, y, 0, 3)) seg(edges, y * W + x, (y + 1) * W + x);
+    }
+
+    const col = colors.p[p], s = view.s;
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.09;
+    ctx.fill(fill);
+    ctx.clip(fill);
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(0.8, s * 0.045);
+    const step = Math.max(3.5, s * 0.34);
+    ctx.beginPath();
+    if (p === 0) {
+      let k = ((view.ox - view.oy) % step) - Math.ceil(ch / step) * step;
+      for (; k < cw; k += step) { ctx.moveTo(k, 0); ctx.lineTo(k + ch, ch); }
+    } else {
+      let k = (view.ox + view.oy) % step;
+      for (; k < cw + ch; k += step) { ctx.moveTo(k, 0); ctx.lineTo(k - ch, ch); }
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1.4, s * 0.1);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke(edges);
+    ctx.restore();
+  }
+
+  function drawDots() {
+    const n = W * H, r = dotR(), s = view.s;
+    for (const p of [0, 1]) {
+      const alive = new Path2D(), dead = new Path2D();
+      for (let i = 0; i < n; i++) {
+        if (game.owner[i] !== p) continue;
+        const [x, y] = pt(i);
+        if (x < -r || y < -r || x > cw + r || y > ch + r) continue;
+        const isLive = game.cap[i] === -1, rr = isLive ? r : r * 0.8, path = isLive ? alive : dead;
+        path.moveTo(x + rr, y);
+        path.arc(x, y, rr, 0, Math.PI * 2);
+      }
+      ctx.fillStyle = colors.p[p];
+      ctx.globalAlpha = 0.38; ctx.fill(dead);
+      ctx.globalAlpha = 1; ctx.fill(alive);
+    }
+    if (game.last >= 0) {
+      const [x, y] = pt(game.last);
+      ctx.strokeStyle = colors.p[game.owner[game.last]];
+      ctx.lineWidth = Math.max(1.2, s * 0.07);
+      ctx.beginPath();
+      ctx.arc(x, y, r + Math.max(2.5, s * 0.16), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawCross() {
+    const [x, y] = pt(ghost);
+    ctx.save();
+    ctx.strokeStyle = colors.p[game.turn];
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, sy(0)); ctx.lineTo(x, sy(DH()));
+    ctx.moveTo(sx(0), y); ctx.lineTo(sx(DW()), y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGhost() {
+    const [x, y] = pt(ghost), r = dotR(), col = colors.p[game.turn];
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.arc(x, y, r + Math.max(6, view.s * 0.32), 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---------- сообщения ----------
+  let toastTimer = 0;
+  function toast(msg, p) {
+    const t = $('toast');
+    t.textContent = msg;
+    if (p === 0 || p === 1) t.dataset.p = p; else delete t.dataset.p;
+    t.hidden = true; void t.offsetWidth; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
+  }
+  function captureToast(res, p) {
+    if (res.gained > 0) {
+      let msg = `${NAMES[p]} захватили ${res.gained} ${plural(res.gained, 'точку', 'точки', 'точек')}`;
+      if (res.freed > 0) msg += ` и вернули ${res.freed} ${plural(res.freed, 'свою', 'своих', 'своих')}`;
+      if (res.extra) msg += ', их ход ещё раз';
+      toast(msg, p);
+    } else if (res.passed) {
+      toast(`У ${GEN[1 - p]} нет ходов, снова ходят ${NOM[p]}`, p);
+    }
+  }
+  function passToast(p, res) {
+    const me = NET ? NET.seat : null;
+    let msg;
+    if (me != null && p === me) msg = 'Время вышло, ход переходит сопернику';
+    else if (me != null) msg = 'Соперник не успел, ваш ход';
+    else msg = `${NAMES[p]} не успели, ходят ${NOM[game.turn]}`;
+    if (res.passed) msg = `${NAMES[p]} не успели, но у ${GEN[1 - p]} нет ходов`;
+    toast(msg, game.turn);
+  }
+
+  // ---------- время хода ----------
+  const nowMs = () => Date.now() + (NET ? NET.offset || 0 : 0);
+  function clockState() {
+    if (!game || game.over || !game.opts.limit) return null;
+    let base;
+    if (NET) {
+      if (!NET.ready || NET.error || !NET.joined[1] || !NET.lastAt) return null;
+      base = NET.lastAt;
+    } else base = clockBase + (pausedAt ? Date.now() - pausedAt : 0);
+    const limit = game.opts.limit * 1000;
+    return { limit, left: base + limit - nowMs() };
+  }
+
+  function localTimeout() {
+    const p = game.turn, res = E.play(game, PASS);
+    if (!res.ok) return;
+    LOCAL.times.push(Date.now());
+    clockBase = Date.now();
+    ghost = -1;
+    buzz([40, 60, 40]);
+    passToast(p, res);
+    save();
+    refresh();
+  }
+
+  function onlineTimeout(net, c) {
+    const me = net.seat;
+    if (me == null) return;
+    const mine = game.turn === me;
+    if (c.left > (mine ? 0 : -PASS_GRACE)) return;
+    const n = net.nextIndex;
+    if (net.passFor === n && Date.now() < net.passRetry) return;
+    net.passFor = n;
+    net.passRetry = Date.now() + 1500;
+    const p = game.turn, res = E.play(game, PASS);
+    if (!res.ok) return;
+    ghost = -1;
+    sendMove(net, PASS, true);
+    if (mine) buzz([40, 60, 40]);
+    passToast(p, res);
+    refresh();
+  }
+
+  function tick() {
+    if (!game) return;
+    const c = clockState();
+    if (c) {
+      if (!NET && c.left <= 0) { localTimeout(); return; }
+      if (NET) { onlineTimeout(NET, c); }
+    }
+    renderStatus();
+  }
+  setInterval(tick, 250);
+
+  function timeStats() {
+    const ts = NET ? NET.times : LOCAL.times, start = NET ? NET.started : LOCAL.started;
+    const n = game.moves.length;
+    if (!start || !n) return null;
+    const st = [0, 1].map(() => ({ moves: 0, total: 0, max: 0, skipped: 0 }));
+    let prev = start;
+    for (let k = 0; k < n; k++) {
+      const t = ts[k];
+      if (typeof t !== 'number') return null;
+      const dt = Math.max(0, t - prev), s = st[game.by[k]];
+      prev = t;
+      if (game.moves[k] === PASS) { s.skipped++; continue; }
+      s.moves++;
+      s.total += dt;
+      if (dt > s.max) s.max = dt;
+    }
+    return st;
+  }
+
+  // ---------- состояние интерфейса ----------
+  function canMove() {
+    if (game.over) return false;
+    if (!NET) return true;
+    return NET.ready && !NET.error && NET.seat != null && !!NET.joined[1] && game.turn === NET.seat;
+  }
+  function whyCantMove() {
+    if (game.over) return 'Партия окончена';
+    if (NET.error) return NET.error;
+    if (!NET.ready) return 'Подключаюсь к партии…';
+    if (NET.seat == null) return 'Вы зритель';
+    if (!NET.joined[1]) return 'Ждём соперника';
+    return 'Сейчас ход соперника';
+  }
+  function statusText(c) {
+    const tail = c ? fmtClock(Math.max(0, Math.ceil(c.left / 1000))) : `ход ${game.moves.length + 1}`;
+    if (!NET) return game.over ? 'партия окончена' : `ходят ${NOM[game.turn]} · ${tail}`;
+    if (NET.error) return NET.error;
+    if (!NET.ready) return 'подключаюсь…';
+    if (game.over) return 'партия окончена';
+    if (NET.everConnected && !NET.connected) return 'нет связи, ходы отправятся позже';
+    if (!NET.joined[1]) return 'ждём соперника';
+    const me = NET.seat;
+    if (me == null) return `вы зритель · ходят ${NOM[game.turn]} · ${tail}`;
+    const opp = 1 - me, len = game.moves.length;
+    if (NET.agree[me] === len && NET.agree[opp] !== len && NET.agree[opp] !== -(len + 1)) return 'ждём ответа на подсчёт';
+    const away = NET.online[opp] ? '' : ' · соперник не в сети';
+    return (game.turn === me ? `ваш ход · ${tail}` : `ход соперника · ${tail}`) + away;
+  }
+
+  function renderStatus() {
+    const c = clockState(), el = $('status'), txt = statusText(c);
+    if (el.textContent !== txt) el.textContent = txt;
+    el.classList.toggle('urgent', !!c && c.left <= 10000);
+    el.dataset.p = game.turn;
+    for (const p of [0, 1]) {
+      const s = $('s' + p);
+      s.classList.toggle('timed', !!c);
+      s.style.setProperty('--fuse', c && game.turn === p ? Math.max(0, Math.min(1, c.left / c.limit)).toFixed(3) : '1');
+    }
+    updateTitle();
+  }
+
+  function updateUI() {
+    const on = !!NET, me = on ? NET.seat : null;
+    for (const p of [0, 1]) {
+      $('n' + p).textContent = game.score[p];
+      $('s' + p).classList.toggle('active', !game.over && game.turn === p && (!on || (NET.ready && !!NET.joined[1])));
+      $('s' + p).classList.toggle('won', game.over && game.result.winner === p);
+      $('you' + p).hidden = !(on && me === p);
+    }
+    renderStatus();
+
+    const place = $('place');
+    let label, enabled = false, action = 'place', color = game.turn;
+    if (game.over) label = 'Партия окончена';
+    else if (on && NET.error) label = 'Нет подключения';
+    else if (on && !NET.ready) label = 'Подключаюсь…';
+    else if (on && me == null) label = 'Вы зритель';
+    else if (on && !NET.joined[1]) {
+      if (me === 0 && NET.oppKey) { label = 'Пригласить соперника'; enabled = true; action = 'invite'; color = 0; }
+      else label = 'Ждём соперника';
+    } else if (on && game.turn !== me) label = 'Ход соперника';
+    else if (ghost >= 0) { label = 'Поставить точку'; enabled = true; }
+    else label = 'Тапните по полю';
+    place.dataset.p = color;
+    place.dataset.action = action;
+    place.disabled = !enabled;
+    $('placeText').textContent = label;
+
+    $('undo').hidden = on;
+    $('bar').classList.toggle('online', on);
+    $('undo').disabled = !game.moves.length && !game.end;
+
+    let offer = false;
+    if (on && NET.ready && me != null && !game.over) {
+      const len = game.moves.length;
+      offer = NET.agree[1 - me] === len && NET.agree[me] !== len && NET.agree[me] !== -(len + 1);
+      if (offer) $('offerText').textContent = `Соперник предлагает закончить и подсчитать. Сейчас ${game.score[0]} : ${game.score[1]}.`;
+    }
+    $('offer').hidden = !offer;
+  }
+
+  function updateTitle() {
+    const mine = NET && NET.ready && NET.seat != null && NET.joined[1] && !game.over && game.turn === NET.seat;
+    const t = mine && document.hidden ? '● Ваш ход · Точки' : 'Точки';
+    if (document.title !== t) document.title = t;
+  }
+  document.addEventListener('visibilitychange', updateTitle);
+
+  function refresh() { updateUI(); requestDraw(); }
+  function setGhost(i) { ghost = i; refresh(); }
+
+  // ---------- конец партии ----------
+  function resultTitle() {
+    const w = game.result.winner;
+    if (w === -1) return 'Ничья';
+    if (NET && NET.seat != null) return w === NET.seat ? 'Вы победили' : 'Победил соперник';
+    return `Победили ${NOM[w]}`;
+  }
+  function resultReason() {
+    const r = game.result;
+    if (r.reason === 'full') return 'Свободных пересечений не осталось';
+    if (r.reason === 'resign') return `${NAMES[r.loser]} сдались`;
+    return 'Закончили по договорённости';
+  }
+  function renderStats() {
+    const box = $('rStats'), st = timeStats();
+    box.textContent = '';
+    box.hidden = !st;
+    if (!st) return;
+    const cell = (cls, text) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; box.append(d); };
+    cell('cap', 'Сколько думали над ходом');
+    cell('k', ''); cell('h r', 'Красные'); cell('h b', 'Синие');
+    const rows = [
+      ['Ходов', (s) => String(s.moves)],
+      ['В среднем', (s) => (s.moves ? fmtDur(s.total / s.moves) : '—')],
+      ['Дольше всего', (s) => (s.moves ? fmtDur(s.max) : '—')],
+    ];
+    if (game.opts.limit) rows.push(['Пропущено по времени', (s) => String(s.skipped)]);
+    for (const [label, f] of rows) { cell('k', label); cell('v', f(st[0])); cell('v', f(st[1])); }
+  }
+  function renderResult() {
+    const el = $('result');
+    $('rTitle').textContent = resultTitle();
+    $('rS0').textContent = game.score[0];
+    $('rS1').textContent = game.score[1];
+    let reason = resultReason();
+    let next = 'Новая партия';
+    if (NET) {
+      if (NET.next && !ownsNext()) { next = 'Принять реванш'; reason += '. Соперник предлагает реванш'; }
+      else next = NET.seat == null ? 'Новая партия' : 'Реванш';
+    }
+    $('rReason').textContent = reason;
+    $('rNew').textContent = next;
+    renderStats();
+    if (game.result.winner === -1) delete el.dataset.p; else el.dataset.p = game.result.winner;
+  }
+  function showResult() { if (game.over) { renderResult(); $('result').hidden = false; } }
+  function hideCards() { $('result').hidden = true; $('offer').hidden = true; }
+
+  // ---------- ходы ----------
+  function onTap(px, py) {
+    if (game.over) { showResult(); return; }
+    if (NET && !canMove()) { toast(whyCantMove()); return; }
+    const u = Math.round((px - view.ox) / view.s), v = Math.round((py - view.oy) / view.s);
+    if (u < 0 || v < 0 || u > DW() || v > DH()) { setGhost(-1); return; }
+    const i = fromDisp(u, v);
+    const why = E.whyIllegal(game, game.turn, i);
+    if (why) { toast(REASONS[why] || 'Сюда нельзя'); return; }
+    if (ghost === i) commit(); else setGhost(i);
+  }
+
+  function commit() {
+    if (ghost < 0 || !canMove()) return;
+    const c = clockState();
+    if (c && c.left <= 0) return;
+    const p = game.turn, i = ghost, net = NET;
+    const res = E.play(game, i);
+    if (!res.ok) { toast(REASONS[res.reason] || 'Сюда нельзя'); return; }
+    ghost = -1;
+    buzz(res.gained > 0 ? [12, 50, 30] : 8);
+    captureToast(res, p);
+    if (net) sendMove(net, i, false);
+    else {
+      LOCAL.times.push(Date.now());
+      clockBase = Date.now();
+      save();
+    }
+    refresh();
+    if (game.over) showResult();
+  }
+
+  function rebuildLocal(d) {
+    game = E.replay(W, H, d.first, d.moves, d.end, d.opts);
+    LOCAL.times = LOCAL.times.slice(0, game.moves.length);
+    clockBase = Date.now();
+    ghost = -1;
+    hideCards();
+    save();
+    refresh();
+  }
+  function undo() {
+    if (NET || (!game.moves.length && !game.end)) return;
+    const d = serialize();
+    if (d.end) d.end = null; else d.moves.pop();
+    rebuildLocal(d);
+  }
+  function newLocalGame(opts) {
+    const first = Math.random() < 0.5 ? 0 : 1;
+    game = E.create(W, H, first, normOpts(opts));
+    LOCAL = { started: Date.now(), times: [] };
+    clockBase = Date.now();
+    ghost = -1;
+    hideCards();
+    save();
+    refresh();
+    fitIfReady();
+    toast(`Жребий: первыми ходят ${NOM[first]}`, first);
+  }
+  function endLocal(end) {
+    E.finish(game, end);
+    ghost = -1;
+    save();
+    refresh();
+    showResult();
+  }
+
+  // ---------- игра по ссылке ----------
+  function fbInit() {
+    if (fb) return fb;
+    if (!fbAvailable) return null;
+    try {
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(window.TOCHKI_FIREBASE);
+      fb = { db: firebase.database(), auth: firebase.auth() };
+    } catch (e) { fb = null; }
+    return fb;
+  }
+  let authPromise = null;
+  function ensureAuth() {
+    if (authPromise) return authPromise;
+    authPromise = new Promise((resolve, reject) => {
+      let off = null, done = false;
+      off = fb.auth.onAuthStateChanged((u) => {
+        if (done) return;
+        if (u) { done = true; if (off) off(); resolve(u); return; }
+        fb.auth.signInAnonymously().catch((e) => { done = true; if (off) off(); authPromise = null; reject(e); });
+      });
+    });
+    return authPromise;
+  }
+  function errText(e) {
+    const c = String((e && (e.code || e.message)) || '');
+    if (/operation-not-allowed|admin-restricted/i.test(c)) return 'В Firebase не включён анонимный вход';
+    if (/network|unavailable/i.test(c)) return 'Нет связи с сервером';
+    if (/PERMISSION_DENIED|permission/i.test(c)) return 'База отказала в доступе';
+    return 'Не получилось подключиться';
+  }
+  function rid(n) {
+    const b = new Uint8Array(n);
+    crypto.getRandomValues(b);
+    let s = '';
+    for (let i = 0; i < n; i++) s += ALPH[b[i] % 36];
+    return s;
+  }
+  async function seatKey(room, k0) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`tochki:${room}:${k0}:1`));
+    const b = new Uint8Array(d);
+    let s = '';
+    for (let i = 0; i < 20; i++) s += ALPH[b[i] % 36];
+    return s;
+  }
+  const TS = () => firebase.database.ServerValue.TIMESTAMP;
+  const baseUrl = () => location.href.split('#')[0];
+  const roomHash = (room, seat, key) => `${room}/${seat}/${key}`;
+  function rooms() { const r = lsGet(ROOMS_KEY, []); return Array.isArray(r) ? r : []; }
+  function remember(room, seat, key) {
+    const r = rooms().filter((x) => !(x.room === room && x.seat === seat));
+    r.unshift({ room, seat, key, at: Date.now() });
+    lsSet(ROOMS_KEY, r.slice(0, 20));
+  }
+  const ownsNext = () => !!(NET && NET.next && rooms().some((r) => r.room === NET.next.room && r.seat === 0));
+
+  function parseHash() {
+    let h = location.hash.replace(/^#/, '');
+    try { h = decodeURIComponent(h); } catch (e) {}
+    const m = h.match(/^([a-z0-9]{8,16})(?:\/([01])\/([a-z0-9]{16,64}))?$/);
+    return m ? { room: m[1], seat: m[2] == null ? null : +m[2], key: m[3] || null } : null;
+  }
+  function go(hash) {
+    if (location.hash.replace(/^#/, '') === hash) route();
+    else location.hash = hash;
+  }
+  function route() { const r = parseHash(); if (r) openRoom(r); else enterLocal(); }
+  window.addEventListener('hashchange', route);
+
+  function closeRoom() {
+    if (!NET) return;
+    const net = NET;
+    for (const off of net.refs) { try { off(); } catch (e) {} }
+    if (fb && net.seat != null) {
+      try {
+        const o = fb.db.ref(`rooms/${net.room}/online/${net.seat}`);
+        o.onDisconnect().cancel();
+        o.remove().catch(() => {});
+      } catch (e) {}
+    }
+    NET = null;
+  }
+  function clearHash() { try { history.replaceState(null, '', baseUrl()); } catch (e) {} }
+
+  function enterLocal(data) {
+    closeRoom();
+    NET = null;
+    const restored = restore(data && data.game) || loadSaved();
+    if (restored) {
+      game = restored.game;
+      LOCAL = { started: restored.started, times: restored.times };
+    } else {
+      game = E.create(W, H, Math.random() < 0.5 ? 0 : 1, setupOpts());
+      LOCAL = { started: Date.now(), times: [] };
+    }
+    clockBase = Date.now(); // после перезагрузки отсчёт хода начинается заново
+    ghost = -1;
+    hideCards();
+    if (!restored) save();
+    refresh();
+    fitIfReady();
+    if (game.over) showResult();
+    if (!game.moves.length && !ssGet('tochki.start')) { ssSet('tochki.start', '1'); openSheet('start'); }
+    else if (!restored) toast(`Жребий: первыми ходят ${NOM[game.first]}`, game.first);
+  }
+  function backToLocal() { clearHash(); closeSheet(); enterLocal(); }
+
+  function netError(net, msg) {
+    if (NET !== net) return;
+    net.error = msg;
+    refresh();
+    toast(msg);
+  }
+
+  async function openRoom(r) {
+    closeRoom();
+    closeSheet();
+    const net = NET = {
+      room: r.room, seat: null, oppKey: null, ready: false, error: null, rebuild: false,
+      connected: false, everConnected: false, joined: {}, online: {}, agree: {}, next: null,
+      nextIndex: 0, refs: [], offset: 0, started: 0, lastAt: 0, times: [], passFor: -1, passRetry: 0,
+    };
+    game = E.create(W, H, 0);
+    ghost = -1;
+    hideCards();
+    refresh();
+    fitIfReady();
+    if (!fbInit()) { netError(net, 'Игра по ссылке работает только на сайте игры'); return; }
+    try {
+      const u = await ensureAuth();
+      if (NET !== net) return;
+      const room0 = (await fb.db.ref(`rooms/${r.room}`).once('value')).val();
+      if (NET !== net) return;
+      if (!room0 || !room0.meta) { netError(net, 'Партия по этой ссылке не найдена'); return; }
+      if (r.seat != null) {
+        try {
+          await fb.db.ref(`members/${r.room}/${u.uid}/${r.seat}`).set(r.key);
+          if (NET !== net) return;
+          net.seat = r.seat;
+          remember(r.room, r.seat, r.key);
+          if (r.seat === 0) net.oppKey = await seatKey(r.room, r.key);
+          if (r.seat === 1 && !room0.started) {
+            // соперник сел за стол: с этого момента идут часы первого хода
+            try { await fb.db.ref(`rooms/${r.room}`).update({ 'joined/1': true, started: TS(), last: TS() }); }
+            catch (e) { await fb.db.ref(`rooms/${r.room}/joined/1`).set(true); }
+          } else await fb.db.ref(`rooms/${r.room}/joined/${r.seat}`).set(true);
+        } catch (e) {
+          if (NET !== net) return;
+          net.seat = null;
+          toast('Ссылка не подходит к этой партии, вы смотрите как зритель');
+        }
+      }
+      if (NET !== net) return;
+      const offRef = fb.db.ref('.info/serverTimeOffset');
+      const onOff = (s) => { if (NET === net) net.offset = +s.val() || 0; };
+      offRef.on('value', onOff);
+      net.refs.push(() => offRef.off('value', onOff));
+      const roomRef = fb.db.ref(`rooms/${r.room}`);
+      const onRoom = (s) => { if (NET === net) applyRoom(net, s.val()); };
+      roomRef.on('value', onRoom, (e) => netError(net, errText(e)));
+      net.refs.push(() => roomRef.off('value', onRoom));
+      const connRef = fb.db.ref('.info/connected');
+      const onConn = (s) => {
+        if (NET !== net) return;
+        net.connected = s.val() === true;
+        if (net.connected) {
+          net.everConnected = true;
+          if (net.seat != null) {
+            const o = fb.db.ref(`rooms/${r.room}/online/${net.seat}`);
+            o.onDisconnect().remove();
+            o.set(true).catch(() => {});
+          }
+        }
+        refresh();
+      };
+      connRef.on('value', onConn);
+      net.refs.push(() => connRef.off('value', onConn));
+    } catch (e) { netError(net, errText(e)); }
+  }
+
+  function resync(net) {
+    net.rebuild = true;
+    fb.db.ref(`rooms/${net.room}`).once('value').then((s) => { if (NET === net) applyRoom(net, s.val()); }).catch(() => {});
+  }
+
+  function sendMove(net, i, isPass) {
+    const n = net.nextIndex, now = nowMs();
+    net.nextIndex = n + 1;
+    net.times[n] = now;
+    net.lastAt = now;
+    fb.db.ref(`rooms/${net.room}`).update({ [`moves/${n}`]: i, [`times/${n}`]: TS(), last: TS() }).catch(() => {
+      if (NET !== net) return;
+      if (!isPass) toast('Ход не отправился, обновляю партию');
+      resync(net);
+    });
+  }
+
+  function byIndex(obj) {
+    const out = [];
+    if (!obj) return out;
+    for (const k of Object.keys(obj)) if (/^\d+$/.test(k) && obj[k] != null) out[+k] = obj[k];
+    return out;
+  }
+  function normMoves(m) {
+    const arr = byIndex(m), list = [];
+    for (let k = 0; k < arr.length; k++) { if (typeof arr[k] !== 'number') break; list.push(arr[k]); }
+    return { list, next: arr.length };
+  }
+  function replaySafe(first, moves, opts) {
+    const g = E.create(W, H, first, opts);
+    for (const i of moves) if (!E.play(g, i).ok) break;
+    return g;
+  }
+  const isPrefix = (a, b) => a.length <= b.length && a.every((v, k) => v === b[k]);
+
+  function applyRoom(net, val) {
+    if (!val || !val.meta) { netError(net, 'Партия по этой ссылке не найдена'); return; }
+    const first = val.meta.first | 0, opts = normOpts(val.meta);
+    const mv = normMoves(val.moves);
+    const me = net.seat, opp = me == null ? null : 1 - me;
+    const was = {
+      ready: net.ready,
+      joinedOpp: opp != null && !!net.joined[opp],
+      agreeOpp: opp != null ? net.agree[opp] : undefined,
+      hadNext: !!net.next,
+      over: game.over,
+    };
+    let incoming = false;
+    const sameOpts = game.opts.bonus === opts.bonus && game.opts.limit === opts.limit;
+    if (!net.ready || net.rebuild || game.first !== first || !sameOpts || !isPrefix(game.moves, mv.list)) {
+      game = replaySafe(first, mv.list, opts);
+      net.rebuild = false;
+    } else {
+      for (let k = game.moves.length; k < mv.list.length; k++) {
+        const p = game.turn, i = mv.list[k], res = E.play(game, i);
+        if (!res.ok) { game = replaySafe(first, mv.list, opts); break; }
+        if (!was.ready) continue;
+        if (i === PASS) { incoming = true; passToast(p, res); }
+        else if (p !== me) { incoming = true; captureToast(res, p); }
+      }
+    }
+    if (val.end && !game.over) E.finish(game, val.end);
+    net.nextIndex = Math.max(mv.next, game.moves.length);
+    net.joined = val.joined || {};
+    net.online = val.online || {};
+    net.agree = val.agree || {};
+    net.next = val.next || null;
+    net.started = +val.started || 0;
+    net.lastAt = +val.last || net.started;
+    net.times = byIndex(val.times);
+    net.ready = true;
+    net.error = null;
+    if (ghost >= 0 && (game.over || !canMove() || E.whyIllegal(game, game.turn, ghost))) ghost = -1;
+
+    if (!was.ready && me === 1 && (opts.bonus || opts.limit) && !game.moves.length) toast(`Правила партии: ${describeOpts(opts)}`);
+    if (was.ready && opp != null) {
+      if (!was.joinedOpp && net.joined[opp]) {
+        toast('Соперник подключился', opp);
+        if (currentPane === 'invite') closeSheet();
+      }
+      if (incoming) buzz(30);
+      const len = game.moves.length;
+      if (net.agree[opp] === -(len + 1) && was.agreeOpp !== net.agree[opp] && net.agree[me] === len) toast('Соперник хочет играть дальше', opp);
+      if (!was.hadNext && net.next && !ownsNext()) toast('Соперник предлагает реванш', opp);
+    }
+    if (game.over && (!was.ready || !was.over || !$('result').hidden)) showResult();
+    if (pendingInvite === net.room && me === 0 && !net.joined[1]) { pendingInvite = null; openSheet('invite'); }
+    refresh();
+  }
+
+  async function createRoom(fromRoom, opts) {
+    if (!fbInit()) { toast('Игра по ссылке работает только на сайте игры'); return; }
+    opts = normOpts(opts);
+    toast('Создаю партию…');
+    try {
+      await ensureAuth();
+      const room = rid(10), k0 = rid(20), k1 = await seatKey(room, k0);
+      const first = Math.random() < 0.5 ? 0 : 1;
+      await fb.db.ref().update({
+        [`keys/${room}/0`]: k0,
+        [`keys/${room}/1`]: k1,
+        [`rooms/${room}/meta`]: { w: W, h: H, first, created: TS(), v: 2, bonus: opts.bonus, limit: opts.limit },
+      });
+      remember(room, 0, k0);
+      if (fromRoom) {
+        try { await fb.db.ref(`rooms/${fromRoom}/next`).set({ room, key: k1 }); }
+        catch (e) {
+          const nx = (await fb.db.ref(`rooms/${fromRoom}/next`).once('value')).val();
+          if (nx) { goNext(nx); return; }
+        }
+      } else pendingInvite = room;
+      go(roomHash(room, 0, k0));
+    } catch (e) { toast(errText(e)); }
+  }
+  function goNext(nx) {
+    const mine = rooms().find((r) => r.room === nx.room && r.seat === 0);
+    go(mine ? roomHash(nx.room, 0, mine.key) : roomHash(nx.room, 1, nx.key));
+  }
+  function rematch() {
+    if (!NET) return;
+    if (NET.seat == null) { openSheet('start'); return; }
+    if (NET.next) goNext(NET.next);
+    else createRoom(NET.room, game.opts);
+  }
+
+  const inviteUrl = () => (NET && NET.oppKey ? `${baseUrl()}#${roomHash(NET.room, 1, NET.oppKey)}` : '');
+  function flashBtn(id, text) {
+    const b = $(id), old = b.dataset.label || b.textContent;
+    b.dataset.label = old;
+    b.textContent = text;
+    setTimeout(() => { b.textContent = old; }, 1800);
+  }
+  function copyInvite() {
+    const inp = $('inviteLink');
+    const fallback = () => { inp.focus(); inp.select(); flashBtn('invCopy', 'Выделено'); };
+    try {
+      navigator.clipboard.writeText(inp.value).then(() => flashBtn('invCopy', 'Скопировано'), fallback);
+    } catch (e) { fallback(); }
+  }
+  function shareInvite() {
+    const url = inviteUrl();
+    if (navigator.share) {
+      navigator.share({ title: 'Точки', text: 'Сыграем в точки? Ты играешь синими.', url }).catch((e) => {
+        if (!e || e.name !== 'AbortError') copyInvite();
+      });
+    } else copyInvite();
+  }
+
+  function proposeAgree() {
+    const net = NET, len = game.moves.length;
+    fb.db.ref(`rooms/${net.room}/agree/${net.seat}`).set(len)
+      .then(() => toast('Предложение отправлено, ждём ответа соперника'))
+      .catch((e) => toast(errText(e)));
+  }
+  async function acceptAgree() {
+    const net = NET, len = game.moves.length;
+    try {
+      await fb.db.ref(`rooms/${net.room}/agree/${net.seat}`).set(len);
+      await fb.db.ref(`rooms/${net.room}/end`).set({ type: 'agree' });
+    } catch (e) { if (NET === net) resync(net); }
+  }
+  function declineAgree() {
+    const net = NET;
+    fb.db.ref(`rooms/${net.room}/agree/${net.seat}`).set(-(game.moves.length + 1)).catch(() => {});
+    $('offer').hidden = true;
+  }
+  function withdrawAgree() { fb.db.ref(`rooms/${NET.room}/agree/${NET.seat}`).remove().catch(() => {}); }
+  function resignOnline() {
+    const net = NET;
+    fb.db.ref(`rooms/${net.room}/end`).set({ type: 'resign', player: net.seat }).catch((e) => toast(errText(e)));
+  }
+
+  // ---------- настройки новой партии ----------
+  function saveSetup() { lsSet(SETUP_KEY, setup); }
+  function syncSetupUI() {
+    $('optBonus').checked = setup.bonus;
+    $('optTimed').checked = setup.timed;
+    $('timeRow').hidden = !setup.timed;
+    if (document.activeElement !== $('tMin')) $('tMin').value = String(Math.floor(setup.limit / 60));
+    if (document.activeElement !== $('tSec')) $('tSec').value = String(setup.limit % 60).padStart(2, '0');
+    $('optBonusNote').textContent = setup.bonus ? 'Окруживший точки соперника ходит ещё раз' : 'Выключен: ходы строго по очереди';
+    $('optTimedNote').textContent = setup.timed ? `${fmtClock(setup.limit)} на ход. Не успел — ход переходит сопернику` : 'Без ограничения';
+  }
+  function setLimit(sec) { setup.limit = clampLimit(sec); saveSetup(); syncSetupUI(); }
+  function readTimeInputs() {
+    const m = Math.min(59, parseInt($('tMin').value, 10) || 0);
+    const s = Math.min(59, parseInt($('tSec').value, 10) || 0);
+    setLimit(m * 60 + s);
+  }
+  $('optBonus').addEventListener('change', (e) => { setup.bonus = e.target.checked; saveSetup(); syncSetupUI(); });
+  $('optTimed').addEventListener('change', (e) => { setup.timed = e.target.checked; saveSetup(); syncSetupUI(); });
+  $('tMinDec').addEventListener('click', () => setLimit(setup.limit - 60));
+  $('tMinInc').addEventListener('click', () => setLimit(setup.limit + 60));
+  $('tSecDec').addEventListener('click', () => setLimit(setup.limit - 5));
+  $('tSecInc').addEventListener('click', () => setLimit(setup.limit + 5));
+  for (const id of ['tMin', 'tSec']) {
+    const inp = $(id);
+    inp.addEventListener('focus', () => inp.select());
+    inp.addEventListener('input', () => { const v = inp.value.replace(/\D/g, '').slice(0, 2); if (v !== inp.value) inp.value = v; });
+    inp.addEventListener('change', () => { readTimeInputs(); });
+    inp.addEventListener('blur', () => { readTimeInputs(); });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+  }
+
+  function startLocalFromSetup() {
+    const opts = setupOpts();
+    const saved = NET ? loadSaved() : { game };
+    const busy = saved && saved.game && saved.game.moves.length && !saved.game.over;
+    const start = () => {
+      if (NET) { closeRoom(); clearHash(); }
+      newLocalGame(opts);
+    };
+    if (busy) ask('Начать новую партию на этом телефоне? Текущая будет потеряна.', 'Начать', start, 'start');
+    else { closeSheet(); start(); }
+  }
+
+  // ---------- меню ----------
+  let pending = null, pendingBack = 'main';
+  function setItem(id, title, note) {
+    $(id).querySelector('.t').textContent = title;
+    $(id).querySelector('small').textContent = note;
+  }
+  function renderMenu() {
+    const on = !!NET, me = on ? NET.seat : null, len = game.moves.length;
+    $('gameInfo').textContent = `Эта партия: ${describeOpts(game.opts)}`;
+    $('mInvite').hidden = !(on && me === 0 && NET.oppKey && !game.over);
+    if (on && me === 0) setItem('mInvite', 'Пригласить соперника', NET.joined[1] ? 'Соперник уже в игре, ссылку можно отправить ещё раз' : 'Ссылка, по которой друг сядет за синих');
+    $('mRooms').hidden = !(fbAvailable && rooms().length);
+    $('mLocal').hidden = !on;
+    const canAct = !game.over && (!on || (NET.ready && me != null && !!NET.joined[1]));
+    $('mAgree').disabled = !canAct;
+    $('mResign').disabled = !canAct;
+    if (on) {
+      const myA = NET.agree[me], opA = me == null ? undefined : NET.agree[1 - me];
+      if (opA === len && myA !== len) setItem('mAgree', 'Согласиться на подсчёт', `Соперник предлагает закончить, сейчас ${game.score[0]} : ${game.score[1]}`);
+      else if (myA === len && opA !== len) setItem('mAgree', 'Отозвать предложение подсчёта', 'Соперник ещё не ответил');
+      else setItem('mAgree', 'Предложить закончить и подсчитать', 'Партия закончится, если соперник согласится');
+      setItem('mResign', 'Сдаться', me == null ? 'Зритель не может сдаться' : `Вы играете за ${GEN[me]}, победа достанется сопернику`);
+    } else {
+      setItem('mAgree', 'Закончить и подсчитать', 'По договорённости, побеждает тот, кто захватил больше');
+      setItem('mResign', 'Сдаться', game.over ? 'Партия уже окончена' : `Сдаются ${NOM[game.turn]}, их сейчас ход`);
+    }
+  }
+  function renderRooms() {
+    const list = $('roomsList');
+    list.textContent = '';
+    for (const r of rooms()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'item';
+      const t = document.createElement('span');
+      t.className = 't';
+      let when = '';
+      try { when = new Date(r.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) {}
+      t.textContent = `Партия от ${when}`;
+      const s = document.createElement('small');
+      s.textContent = `Вы за ${GEN[r.seat]}` + (NET && NET.room === r.room ? ' · открыта сейчас' : '');
+      b.append(t, s);
+      b.addEventListener('click', () => { closeSheet(); go(roomHash(r.room, r.seat, r.key)); });
+      list.append(b);
+    }
+  }
+  function showPane(name) {
+    currentPane = name;
+    for (const k of ['start', 'main', 'confirm', 'rules', 'invite', 'rooms']) $('pane-' + k).hidden = k !== name;
+    if (name === 'main') renderMenu();
+    if (name === 'rooms') renderRooms();
+    if (name === 'invite') {
+      $('inviteLink').value = inviteUrl();
+      $('inviteInfo').textContent = `Правила этой партии: ${describeOpts(game.opts)}.`;
+    }
+    if (name === 'start') {
+      syncSetupUI();
+      $('stLink').hidden = !fbAvailable;
+      $('stRooms').hidden = !(fbAvailable && rooms().length);
+    }
+  }
+  function openSheet(name) {
+    if (!NET && !pausedAt) pausedAt = Date.now();
+    $('sheet').hidden = false;
+    showPane(name || 'main');
+  }
+  function closeSheet() {
+    if (pausedAt) { clockBase += Date.now() - pausedAt; pausedAt = 0; }
+    $('sheet').hidden = true; pending = null; currentPane = null;
+  }
+  function ask(text, yes, fn, back) {
+    $('confirmText').textContent = text;
+    $('cYes').textContent = yes;
+    pending = fn;
+    pendingBack = back || 'main';
+    showPane('confirm');
+  }
+
+  $('menuBtn').addEventListener('click', () => openSheet('main'));
+  $('mClose').addEventListener('click', closeSheet);
+  $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) closeSheet(); });
+  $('mRules').addEventListener('click', () => showPane('rules'));
+  $('rulesBack').addEventListener('click', () => showPane('main'));
+  $('cNo').addEventListener('click', () => { pending = null; showPane(pendingBack); });
+  $('cYes').addEventListener('click', () => { const fn = pending; closeSheet(); if (fn) fn(); });
+  $('mInvite').addEventListener('click', () => showPane('invite'));
+  $('mNew').addEventListener('click', () => showPane('start'));
+  $('mRooms').addEventListener('click', () => showPane('rooms'));
+  $('roomsBack').addEventListener('click', () => showPane('main'));
+  $('roomsNew').addEventListener('click', () => showPane('start'));
+  $('mLocal').addEventListener('click', backToLocal);
+  $('mAgree').addEventListener('click', () => {
+    if (!NET) {
+      ask(`Закончить партию и подсчитать? Сейчас ${game.score[0]} : ${game.score[1]}.`, 'Подсчитать', () => endLocal({ type: 'agree' }));
+      return;
+    }
+    const me = NET.seat, len = game.moves.length, myA = NET.agree[me], opA = NET.agree[1 - me];
+    if (opA === len && myA !== len) ask(`Закончить партию и подсчитать? Сейчас ${game.score[0]} : ${game.score[1]}.`, 'Подсчитать', acceptAgree);
+    else if (myA === len && opA !== len) { closeSheet(); withdrawAgree(); }
+    else { closeSheet(); proposeAgree(); }
+  });
+  $('mResign').addEventListener('click', () => {
+    if (!NET) {
+      const p = game.turn;
+      ask(`${NAMES[p]} сдаются и проигрывают партию?`, 'Сдаться', () => endLocal({ type: 'resign', player: p }));
+    } else ask('Сдаться? Победа достанется сопернику.', 'Сдаться', resignOnline);
+  });
+  $('stLink').addEventListener('click', () => { closeSheet(); createRoom(null, setupOpts()); });
+  $('stLocal').addEventListener('click', startLocalFromSetup);
+  $('stRooms').addEventListener('click', () => showPane('rooms'));
+  $('stClose').addEventListener('click', closeSheet);
+  $('invCopy').addEventListener('click', copyInvite);
+  $('invShare').addEventListener('click', shareInvite);
+  $('invClose').addEventListener('click', closeSheet);
+  $('inviteLink').addEventListener('focus', (e) => e.target.select());
+
+  $('place').addEventListener('click', () => {
+    if ($('place').dataset.action === 'invite') openSheet('invite');
+    else commit();
+  });
+  $('undo').addEventListener('click', undo);
+  $('rView').addEventListener('click', hideCards);
+  $('rNew').addEventListener('click', () => { if (NET) rematch(); else newLocalGame(game.opts); });
+  $('offYes').addEventListener('click', () => { $('offer').hidden = true; acceptAgree(); });
+  $('offNo').addEventListener('click', declineAgree);
+  $('zin').addEventListener('click', () => {
+    const [x, y] = ghost >= 0 ? pt(ghost) : [cw / 2, ch / 2];
+    zoomAt(1.6, x, y);
+  });
+  $('zout').addEventListener('click', () => zoomAt(1 / 1.6, cw / 2, ch / 2));
+  $('zfit').addEventListener('click', () => { fit(); requestDraw(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (!$('sheet').hidden) closeSheet(); else setGhost(-1); }
+    else if (e.key === 'Enter' && $('sheet').hidden && ghost >= 0 && document.activeElement === document.body) commit();
+  });
+
+  // ---------- жесты: тап, перемещение одним пальцем, масштаб двумя ----------
+  const pts = new Map();
+  let gesture = null;
+  const rel = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  cv.addEventListener('pointerdown', (e) => {
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+    const p = rel(e);
+    pts.set(e.pointerId, p);
+    if (pts.size === 1) gesture = { type: 'tap', sx: p.x, sy: p.y, ox: view.ox, oy: view.oy };
+    else if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      gesture = { type: 'pinch', d: Math.max(dist(a, b), 1), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, s: view.s, ox: view.ox, oy: view.oy };
+    }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId) || !gesture) return;
+    const p = rel(e);
+    pts.set(e.pointerId, p);
+    if (gesture.type === 'pinch' && pts.size >= 2) {
+      const [a, b] = [...pts.values()];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const s1 = Math.min(Math.max(gesture.s * dist(a, b) / gesture.d, view.fit), maxS());
+      const k = s1 / gesture.s;
+      view.s = s1;
+      view.ox = mx - (gesture.mx - gesture.ox) * k;
+      view.oy = my - (gesture.my - gesture.oy) * k;
+      clampView();
+      requestDraw();
+    } else if (pts.size === 1 && gesture.type !== 'pinch') {
+      const dx = p.x - gesture.sx, dy = p.y - gesture.sy;
+      if (gesture.type === 'tap' && Math.hypot(dx, dy) > 10) gesture.type = 'pan';
+      if (gesture.type === 'pan') {
+        view.ox = gesture.ox + dx;
+        view.oy = gesture.oy + dy;
+        clampView();
+        requestDraw();
+      }
+    }
+  });
+  function pointerEnd(e) {
+    if (!pts.has(e.pointerId)) return;
+    const p = rel(e);
+    pts.delete(e.pointerId);
+    if (gesture && gesture.type === 'tap' && pts.size === 0 && e.type === 'pointerup') onTap(p.x, p.y);
+    if (pts.size === 0) gesture = null;
+    else if (gesture && gesture.type === 'pinch' && pts.size === 1) {
+      const q = [...pts.values()][0];
+      gesture = { type: 'pan', sx: q.x, sy: q.y, ox: view.ox, oy: view.oy };
+    }
+  }
+  cv.addEventListener('pointerup', pointerEnd);
+  cv.addEventListener('pointercancel', pointerEnd);
+  cv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const p = rel(e);
+    zoomAt(Math.exp(-e.deltaY * 0.0015), p.x, p.y);
+  }, { passive: false });
+
+  const onTheme = () => { readColors(); requestDraw(); };
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme); } catch (e) {}
+  new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+
+  // для проверок
+  window.__tochki = { get game() { return game; }, get net() { return NET; }, get local() { return LOCAL; }, pt, view, timeStats };
+
+  function start(data) {
+    readColors();
+    const h = parseHash();
+    if (h) openRoom(h); else enterLocal(data);
+    new ResizeObserver(resize).observe(wrap);
+    resize();
+    try {
+      const hot = window.claude && window.claude.hot;
+      if (hot && hot.snapshot) hot.snapshot(() => (NET ? {} : { game: serialize() }));
+    } catch (e) {}
+  }
+  const hot = window.claude && window.claude.hot;
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
